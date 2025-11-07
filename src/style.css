@@ -1,0 +1,75 @@
+/* Grund-Styles */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    background: linear-gradient(180deg, #0f1113, #1b1c1f);
+    color: #e6e6e6;
+}
+
+.container {
+    padding: 20px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+}
+
+.tile-card {
+    perspective: 1000px;
+}
+
+.tile-inner {
+    transition: transform 0.7s;
+    transform-style: preserve-3d;
+    position: relative;
+}
+
+.tile-front,
+.tile-back {
+    backface-visibility: hidden;
+    position: relative;
+    padding: 18px;
+    border-radius: 10px;
+    min-height: 140px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+
+.tile-front {
+    background: linear-gradient(180deg, #222, #161616);
+}
+
+.tile-back {
+    background: linear-gradient(180deg, #2b2208, #15100a);
+    transform: rotateY(180deg);
+}
+
+
+.live-flow-bar {
+    margin-top: 26px;
+    height: 130px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+
+.live-item {
+    position: absolute;
+    bottom: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #f6b21a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}

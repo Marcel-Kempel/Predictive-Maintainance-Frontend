@@ -1,0 +1,15 @@
+.live-flow-bar {
+    position: relative;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    padding: 6px;
+}
+
+.live-item {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    position: absolute;
+    transition: transform 0.04s linear;
+}

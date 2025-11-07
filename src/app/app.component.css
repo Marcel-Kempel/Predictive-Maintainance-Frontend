@@ -1,0 +1,13 @@
+/* kleine Anpassungen */
+.container {
+    max-width: 1200px;
+    margin: 12px auto;
+}
+
+h2 {
+    margin: 0;
+}
+
+.grid .tile-card {
+    height: 160px;
+}

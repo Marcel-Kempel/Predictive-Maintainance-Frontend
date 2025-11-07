@@ -1,0 +1,4 @@
+<div #container class="live-flow-bar">
+    <div *ngFor="let it of items" class="live-item"
+        [ngStyle]="{'left.px': it.x, 'bottom.px': it.y, 'background': it.color}"></div>
+</div>
