@@ -20,8 +20,8 @@ export class LiveFlowComponent implements OnInit, OnDestroy {
 
 
     ngOnInit() {
-        // Simuliere eingehende Events: alle 800ms kommt ein Punkt
-        this.sub = interval(800).subscribe(() => this.pushRandomItem());
+        // Simuliere eingehende Events: alle 5000ms kommt ein Punkt
+        this.sub = interval(5000).subscribe(() => this.pushRandomItem());
         // Animationsloop: alle 50ms verschiebe Items nach links
         const move = interval(50).subscribe(() => this.tick());
         this.sub.add(move);
