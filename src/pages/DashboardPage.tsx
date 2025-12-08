@@ -1,27 +1,127 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { api, GetDataResponse, PredictResponse, COLUMN_NAMES } from '../api/client';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
+import { AlertTriangle, TrendingUp } from 'lucide-react';
+
+type TrendPoint = {
+  time: string;
+  torque: number;
+  speed: number;
+  temp: number;
+};
+
+type DashboardKpis = {
+  failureProbability: number;
+  activeWarnings: number;
+  avgToolWear: number;
+  avgTorque: number;
+};
 
 export function DashboardPage() {
-  const trendData = [
-    { time: '00:00', torque: 42.8, speed: 1551, temp: 308.6 },
-    { time: '02:00', torque: 46.3, speed: 1408, temp: 308.7 },
-    { time: '04:00', torque: 49.4, speed: 1498, temp: 308.5 },
-    { time: '06:00', torque: 39.5, speed: 1433, temp: 308.6 },
-    { time: '08:00', torque: 40.0, speed: 1408, temp: 308.7 },
-    { time: '10:00', torque: 45.2, speed: 1520, temp: 308.8 }
-  ];
+  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const warnings = [
     { time: '08:34', mode: 'OSF', severity: 'Hoch', recommendation: 'Werkzeugverschleiß hoch → Wechsel empfohlen' },
     { time: '10:12', mode: 'HDF', severity: 'Mittel', recommendation: 'Temperatur prüfen' }
   ];
 
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Messdaten + Modell-Output parallel laden
+        const [dataRes, predictRes]: [GetDataResponse, PredictResponse] = await Promise.all([
+          api.getData(200, [
+            COLUMN_NAMES.torque,
+            COLUMN_NAMES.rpm,
+            COLUMN_NAMES.procTemp,
+            COLUMN_NAMES.toolWear,
+          ]),
+          api.getFailurePredictions(),
+        ]);
+
+
+        const rows = dataRes.data as any[];
+
+        // Trenddaten für das Chart vorbereiten
+        const trend: TrendPoint[] = rows.map((row, index) => ({
+          time: index.toString(), // künstliche Zeitachse, da Dataset keinen echten Timestamp hat
+          torque: Number(row['Torque [Nm]'] ?? 0),
+          speed: Number(row['Rotational speed [rpm]'] ?? 0),
+          temp: Number(row['Process temperature [K]'] ?? 0)
+        }));
+
+        // KPIs aus den Daten berechnen
+        const avgTorque =
+          rows.length > 0
+            ? rows.reduce((sum, row) => sum + Number(row['Torque [Nm]'] ?? 0), 0) / rows.length
+            : 0;
+
+        const avgToolWear =
+          rows.length > 0
+            ? rows.reduce((sum, row) => sum + Number(row['Tool wear [min]'] ?? 0), 0) / rows.length
+            : 0;
+
+        const failureProbability =
+          predictRes.total_samples > 0
+            ? (predictRes.failure_predictions_count / predictRes.total_samples) * 100
+            : 0;
+
+        const activeWarnings = predictRes.failure_predictions_count;
+
+        setTrendData(trend);
+        setKpis({
+          failureProbability,
+          activeWarnings,
+          avgTorque,
+          avgToolWear
+        });
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message ?? 'Fehler beim Laden der Dashboard-Daten');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6 text-sm" style={{ color: '#9ca3af' }}>
+        Lade Dashboard-Daten…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-sm" style={{ color: '#ef4444' }}>
+        Fehler beim Laden der Dashboard-Daten: {error}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Title Section */}
-      <div 
+      <div
         className="p-6 rounded-[14px] shadow-lg"
-        style={{ 
+        style={{
           background: '#232421',
           boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
         }}
@@ -36,9 +136,9 @@ export function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div 
+        <div
           className="p-5 rounded-[14px] shadow-lg"
-          style={{ 
+          style={{
             background: '#232421',
             boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
           }}
@@ -50,16 +150,16 @@ export function DashboardPage() {
             <TrendingUp className="w-5 h-5" style={{ color: '#a78bfa' }} />
           </div>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-            12%
+            {kpis ? `${kpis.failureProbability.toFixed(1)}%` : '–'}
           </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            Ausfallwahrscheinlichkeit (aktuelle Charge)
+            Ausfallwahrscheinlichkeit (aktuelle Auswahl)
           </p>
         </div>
 
-        <div 
+        <div
           className="p-5 rounded-[14px] shadow-lg"
-          style={{ 
+          style={{
             background: '#232421',
             boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
           }}
@@ -71,16 +171,16 @@ export function DashboardPage() {
             <AlertTriangle className="w-5 h-5" style={{ color: '#f59e0b' }} />
           </div>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-            2
+            {kpis ? kpis.activeWarnings : '–'}
           </p>
           <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
             Erfordert Aufmerksamkeit
           </p>
         </div>
 
-        <div 
+        <div
           className="p-5 rounded-[14px] shadow-lg"
-          style={{ 
+          style={{
             background: '#232421',
             boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
           }}
@@ -89,16 +189,16 @@ export function DashboardPage() {
             Ø Tool Wear
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-            142 min
+            {kpis ? `${kpis.avgToolWear.toFixed(0)} min` : '–'}
           </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '0.5rem' }}>
             Durchschnittlicher Verschleiß
           </p>
         </div>
 
-        <div 
+        <div
           className="p-5 rounded-[14px] shadow-lg"
-          style={{ 
+          style={{
             background: '#232421',
             boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
           }}
@@ -107,7 +207,7 @@ export function DashboardPage() {
             Ø Torque
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-            40.3 Nm
+            {kpis ? `${kpis.avgTorque.toFixed(1)} Nm` : '–'}
           </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '0.5rem' }}>
             Durchschnittliches Drehmoment
@@ -116,9 +216,9 @@ export function DashboardPage() {
       </div>
 
       {/* Trend Chart */}
-      <div 
+      <div
         className="p-6 rounded-[14px] shadow-lg"
-        style={{ 
+        style={{
           background: '#232421',
           boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
         }}
@@ -132,7 +232,7 @@ export function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
             <XAxis dataKey="time" stroke="#9ca3af" style={{ fontSize: '0.75rem' }} />
             <YAxis stroke="#9ca3af" style={{ fontSize: '0.75rem' }} />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ background: '#232421', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.875rem' }}
               labelStyle={{ color: '#e5e7eb' }}
             />
@@ -159,9 +259,9 @@ export function DashboardPage() {
       </div>
 
       {/* Warnings Panel */}
-      <div 
+      <div
         className="p-6 rounded-[14px] shadow-lg"
-        style={{ 
+        style={{
           background: '#232421',
           boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)'
         }}
@@ -170,7 +270,7 @@ export function DashboardPage() {
           Aktuelle Warnungen
         </h2>
 
-        <div 
+        <div
           className="rounded-lg overflow-hidden"
           style={{ background: '#6b675c' }}
         >
@@ -185,15 +285,19 @@ export function DashboardPage() {
             </thead>
             <tbody>
               {warnings.map((warning, index) => (
-                <tr 
+                <tr
                   key={index}
                   style={{ borderBottom: index < warnings.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none' }}
                 >
                   <td className="px-4 py-3" style={{ color: '#e5e7eb', fontSize: '0.875rem' }}>{warning.time}</td>
                   <td className="px-4 py-3" style={{ color: '#e5e7eb', fontSize: '0.875rem' }}>
-                    <span 
+                    <span
                       className="px-2 py-1 rounded"
-                      style={{ background: warning.severity === 'Hoch' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: warning.severity === 'Hoch' ? '#ef4444' : '#f59e0b', fontSize: '0.75rem' }}
+                      style={{
+                        background: warning.severity === 'Hoch' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                        color: warning.severity === 'Hoch' ? '#ef4444' : '#f59e0b',
+                        fontSize: '0.75rem'
+                      }}
                     >
                       {warning.mode}
                     </span>
@@ -208,7 +312,7 @@ export function DashboardPage() {
       </div>
 
       <footer className="pt-8 pb-6 text-center" style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
-        © 2025 – Mockup • Predictive Analysis Grundgerüst
+        © 2025 – Predictive Maintenance Dashboard (Live-Daten aus Backend)
       </footer>
     </div>
   );
