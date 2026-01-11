@@ -1,22 +1,23 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LogOut, User } from 'lucide-react';
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 export function Header() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { setIsAuthenticated } = useContext(AuthContext);
-  
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    navigate('/login');
+  const auth = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await auth.logout();
+    } finally {
+      navigate('/login');
+    }
   };
-  
+
   return (
-    <header 
+    <header
       className="sticky top-0 z-50 backdrop-blur-md border-b"
-      style={{ 
+      style={{
         background: 'rgba(35, 36, 33, 0.85)',
         borderColor: 'rgba(255, 255, 255, 0.05)'
       }}
@@ -24,7 +25,7 @@ export function Header() {
       <div className="px-8 py-4 flex items-center justify-between">
         {/* Logo and Brand */}
         <div className="flex items-center gap-3">
-          <div 
+          <div
             className="w-7 h-7 rounded-lg shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%)',
@@ -36,14 +37,17 @@ export function Header() {
             <span style={{ color: '#22d3ee' }}>Analysis</span>
           </div>
         </div>
-        
-        {/* Navigation */}
+
+        {/* User + Logout */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 px-4 py-2" style={{ color: '#9ca3af' }}>
             <User className="w-4 h-4" />
-            <span>Admin</span>
+            <span>
+              {auth.user?.username ?? "—"}
+              {auth.user?.role ? ` (${auth.user.role})` : ""}
+            </span>
           </div>
-          
+
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors hover:bg-white/10"

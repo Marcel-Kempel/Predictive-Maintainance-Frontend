@@ -1,6 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useState } from 'react';
-import { AuthContext } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProtectedLayout } from './components/ProtectedLayout';
@@ -8,18 +6,24 @@ import { ModelInsightsPage } from './pages/ModelInsightsPage';
 import { PredictionPage } from './pages/PredictionPage';
 import { EinstellungenPage } from './pages/EinstellungenPage';
 
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+import { AuthProvider } from "./context/AuthContext";
+import { RequireAuth } from "./routes/RequireAuth";
 
+export default function App() {
   return (
-    <AuthContext.Provider value={{ isAuthenticated, setIsAuthenticated }}>
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
-          <Route 
-            path="/" 
+
+          {/* Protected Layout */}
+          <Route
+            path="/"
             element={
-              isAuthenticated ? <ProtectedLayout /> : <Navigate to="/login" replace />
+              <RequireAuth>
+                <ProtectedLayout />
+              </RequireAuth>
             }
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
@@ -28,9 +32,11 @@ export default function App() {
             <Route path="prediction" element={<PredictionPage />} />
             <Route path="einstellungen" element={<EinstellungenPage />} />
           </Route>
-          <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
-    </AuthContext.Provider>
+    </AuthProvider>
   );
 }

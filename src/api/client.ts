@@ -1,8 +1,20 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
+export class ApiError extends Error {
+  status: number;
+  bodyText: string;
+
+  constructor(status: number, bodyText: string) {
+    super(`API error ${status}: ${bodyText}`);
+    this.status = status;
+    this.bodyText = bodyText;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include", // <- wichtig für Sessions/Cookies (auch wenn Backend später erst kommt)
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -10,12 +22,26 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API error ${res.status}: ${text}`);
+    if (!res.ok) {
+  const text = await res.text();
+
+  // Globales Event, damit App bei 401 automatisch reagieren kann
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
   }
 
-  return res.json() as Promise<T>;
+  throw new ApiError(res.status, text || res.statusText);
+}
+
+
+  // falls mal 204 kommt
+  if (res.status === 204) return undefined as T;
+
+  const text = await res.text();
+  if (!text) return undefined as T;
+
+  return JSON.parse(text) as T;
+
 }
 
 // ----- Typen entsprechend dem Backend -----
@@ -94,4 +120,23 @@ export const api = {
     const params = new URLSearchParams({ model_name: modelName });
     return request<any>(`/evaluate_model?${params.toString()}`);
   },
+    auth: {
+    login(username: string, password: string) {
+      return request<{ ok: boolean; username?: string; role?: string }>(`/auth/login`, {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+    },
+
+    logout() {
+      return request<{ ok: boolean }>(`/auth/logout`, {
+        method: "POST",
+      });
+    },
+
+    me() {
+      return request<{ ok: boolean; username: string; role?: string }>(`/auth/me`);
+    },
+  },
+
 };
