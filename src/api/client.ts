@@ -1,20 +1,7 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
-
-export class ApiError extends Error {
-  status: number;
-  bodyText: string;
-
-  constructor(status: number, bodyText: string) {
-    super(`API error ${status}: ${bodyText}`);
-    this.status = status;
-    this.bodyText = bodyText;
-  }
-}
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: "include", // <- wichtig für Sessions/Cookies (auch wenn Backend später erst kommt)
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -22,26 +9,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
   });
 
-    if (!res.ok) {
-  const text = await res.text();
-
-  // Globales Event, damit App bei 401 automatisch reagieren kann
-  if (res.status === 401) {
-    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API error ${res.status}: ${text}`);
   }
 
-  throw new ApiError(res.status, text || res.statusText);
-}
-
-
-  // falls mal 204 kommt
-  if (res.status === 204) return undefined as T;
-
-  const text = await res.text();
-  if (!text) return undefined as T;
-
-  return JSON.parse(text) as T;
-
+  return res.json() as Promise<T>;
 }
 
 // ----- Typen entsprechend dem Backend -----
@@ -83,10 +56,21 @@ export interface PredictResponse {
   failure_predictions: FailurePrediction[];
 }
 
-export interface SimPreviewResponse {
+export interface PredictLatestResponse {
+  running: boolean;
   model_name: string;
-  sample_count: number;
-  results: any[];
+  interval: number;
+  batch_size: number;
+  latest: any;
+  summary: any;
+}
+
+export interface PredictStatusResponse {
+  running: boolean;
+  model_name?: string;
+  interval?: number;
+  batch_size?: number;
+  last_result?: any;
 }
 
 // ----- API-Funktionen -----
@@ -103,40 +87,52 @@ export const api = {
     return request<GetDataResponse>(`/getdata?${params.toString()}`);
   },
 
+  // Test-set predictions (offline)
   getFailurePredictions(modelName = "Random_Forest") {
     const params = new URLSearchParams({ model_name: modelName });
-    return request<PredictResponse>(`/predict?${params.toString()}`);
+    return request<PredictResponse>(`/predict_testset_failures?${params.toString()}`);
   },
 
-  getSimPreview(limit = 10, modelName = "Random_Forest") {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      model_name: modelName,
+  // Prediction service control
+  async startPrediction(interval = 1.0, modelName = "Random_Forest", batchSize = 50) {
+    return request<any>(`/predict/start?interval=${interval}&model_name=${modelName}&batch_size=${batchSize}`, {
+      method: "POST",
     });
-    return request<SimPreviewResponse>(`/sim_preview?${params.toString()}`);
   },
 
-  evaluateModel(modelName = "Random_Forest") {
-    const params = new URLSearchParams({ model_name: modelName });
-    return request<any>(`/evaluate_model?${params.toString()}`);
-  },
-    auth: {
-    login(username: string, password: string) {
-      return request<{ ok: boolean; username?: string; role?: string }>(`/auth/login`, {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      });
-    },
-
-    logout() {
-      return request<{ ok: boolean }>(`/auth/logout`, {
-        method: "POST",
-      });
-    },
-
-    me() {
-      return request<{ ok: boolean; username: string; role?: string }>(`/auth/me`);
-    },
+  async stopPrediction() {
+    return request<any>(`/predict/stop`, { method: "POST" });
   },
 
+  getPredictionStatus() {
+    return request<PredictStatusResponse>(`/predict/status`);
+  },
+
+  getPredictionLatest() {
+    return request<PredictLatestResponse>(`/predict/latest`);
+  },
+
+  // One-off prediction
+  async predictOnce(modelName = "Random_Forest", batchSize = 50) {
+    return request<any>(`/predict/once?model_name=${modelName}&batch_size=${batchSize}`, {
+      method: "POST",
+    });
+  },
+
+  // Simulation control
+  async startSimulation(interval = 1.0) {
+    return request<any>(`/simulation/start?interval=${interval}`, { method: "POST" });
+  },
+
+  async stopSimulation() {
+    return request<any>(`/simulation/stop`, { method: "POST" });
+  },
+
+  getSimulationStatus() {
+    return request<any>(`/simulation/status`);
+  },
+
+  async resetSimulation() {
+    return request<any>(`/simulation/reset`, { method: "POST" });
+  },
 };

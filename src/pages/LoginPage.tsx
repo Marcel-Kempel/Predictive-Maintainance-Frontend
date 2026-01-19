@@ -1,64 +1,41 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError } from '../api/client';
-import { useAuth } from "../context/AuthContext";
+import { AuthContext } from '../context/AuthContext';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
+  const { setIsAuthenticated } = useContext(AuthContext);
   const navigate = useNavigate();
-  const auth = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-
-    if (!username || !password) {
-      setErrorMsg("Bitte Benutzername und Passwort eingeben.");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-
-      await auth.login(username, password);
-      navigate("/dashboard");
-    } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 401) setErrorMsg("Falsche Zugangsdaten.");
-        else if (err.status === 404) setErrorMsg("Login-Endpoint nicht vorhanden (Backend noch ohne /auth/login).");
-        else setErrorMsg(`Login fehlgeschlagen (HTTP ${err.status}).`);
-      } else {
-        setErrorMsg("Server nicht erreichbar oder Netzwerkfehler.");
-      }
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    // Einfache Demo-Authentifizierung
+    if (username && password) {
+      setIsAuthenticated(true);
+      navigate('/dashboard');
     }
   };
 
   return (
-    <div
+    <div 
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{ background: '#f6f4ec' }}
     >
       {/* Radial glow effects in background */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-yellow-200/20 rounded-full blur-3xl"></div>
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-green-200/20 rounded-full blur-3xl"></div>
-
-      <div
+      
+      <div 
         className="relative w-full max-w-md p-8 rounded-[14px] shadow-lg"
-        style={{
+        style={{ 
           background: '#232421',
           boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)'
         }}
       >
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div
+          <div 
             className="w-10 h-10 rounded-lg shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%)',
@@ -79,12 +56,6 @@ export function LoginPage() {
         </p>
 
         <form onSubmit={handleLogin} className="space-y-5">
-          {errorMsg && (
-            <p style={{ color: "#f87171", fontSize: "0.875rem" }}>
-              {errorMsg}
-            </p>
-          )}
-
           <div>
             <label className="block mb-2" style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
               Benutzername
@@ -94,7 +65,7 @@ export function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-3 rounded-lg outline-none transition-all"
-              style={{
+              style={{ 
                 background: 'rgba(107, 103, 92, 0.3)',
                 border: '1px solid rgba(156, 163, 175, 0.2)',
                 color: '#e5e7eb'
@@ -112,7 +83,7 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg outline-none transition-all"
-              style={{
+              style={{ 
                 background: 'rgba(107, 103, 92, 0.3)',
                 border: '1px solid rgba(156, 163, 175, 0.2)',
                 color: '#e5e7eb'
@@ -123,7 +94,6 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={isLoading}
             className="w-full py-3 rounded-lg transition-all hover:opacity-90 text-center"
             style={{
               background: 'linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%)',
@@ -131,12 +101,12 @@ export function LoginPage() {
               boxShadow: '0 0 20px rgba(34, 211, 238, 0.3)'
             }}
           >
-            {isLoading ? "Anmelden..." : "Anmelden"}
+          Anmelden
           </button>
         </form>
 
         <p className="mt-6 text-center" style={{ color: '#6b675c', fontSize: '0.75rem' }}>
-          Login ist jetzt echt (DB/Cookie)
+          Demo: Beliebige Anmeldedaten eingeben
         </p>
       </div>
     </div>
