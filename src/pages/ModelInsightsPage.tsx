@@ -1,14 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
-import { useEffect, useState } from "react";
-
-
 
 export function ModelInsightsPage() {
-
-  // --------------------------------------------
-  // Mock / Platzhalter: Feature Importances
-  // (kann später durch Backend ersetzt werden)
-  // --------------------------------------------
   const featureImportances = [
     { feature: 'Torque', value: 0.52 },
     { feature: 'Rotational Speed', value: 0.21 },
@@ -18,184 +10,16 @@ export function ModelInsightsPage() {
     { feature: 'Product Type', value: 0.02 }
   ];
 
-  // --------------------------------------------
-  // State: ROC-Daten + AUC Wert
-  // - rocData: Array von Punkten {fpr, tpr}
-  // - auc: Area Under Curve
-  // - rocLoading: UI Loading-Status
-  // --------------------------------------------
-  
-const [rocData, setRocData] = useState<{ fpr: number; tpr: number }[]>([]);
-const [auc, setAuc] = useState<number | null>(null);
-const [rocLoading, setRocLoading] = useState(true);
+  const rocData = [
+    { fpr: 0, tpr: 0 },
+    { fpr: 0.1, tpr: 0.75 },
+    { fpr: 0.2, tpr: 0.88 },
+    { fpr: 0.3, tpr: 0.94 },
+    { fpr: 0.4, tpr: 0.97 },
+    { fpr: 0.5, tpr: 0.98 },
+    { fpr: 1, tpr: 1 }
+  ];
 
-
-
-// --------------------------------------------
-  // State: Modell-Metriken (Accuracy, F1, Precision, Recall)
-  // - wird aus Backend geladen (model/metrics)
-  // - null bedeutet: nicht verfügbar oder noch nicht geladen
-  // --------------------------------------------
-const [metrics, setMetrics] = useState<{
-  accuracy: number | null;
-  f1: number | null;
-  precision: number | null;
-  recall: number | null;
-}>({ accuracy: null, f1: null, precision: null, recall: null });
-
-const [metricsLoading, setMetricsLoading] = useState(true);
-
-
-// ============================================================
-  // 1) ROC + AUC vom Backend laden
-  // Endpoint: GET /model/roc?model_name=Random_Forest
-  //
-  // Erwartetes JSON (Beispiel):
-  // {
-  //   "auc": 0.92,
-  //   "points": [{"fpr":0.0,"tpr":0.0}, ...]
-  // }
-  //
-  // Wichtig:
-  // - Konvertiert Werte zu Number
-  // - Filtert NaN raus
-  // - Sortiert nach fpr (für saubere Kurve)
-  // ============================================================
-
-useEffect(() => {
-  let alive = true;
-
-  const load = async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:8000/model/roc?model_name=Random_Forest");
-      
-      // Wenn Endpoint nicht existiert/fehlschlägt -> keine ROC anzeigen
-    
-      if (!res.ok) {
-        console.error("ROC endpoint returned not OK:", res.status);
-        // Use fallback mock data if endpoint not available
-        // setRocData([
-        //   { fpr: 0, tpr: 0 },
-        //   { fpr: 0.1, tpr: 0.75 },
-        //   { fpr: 0.2, tpr: 0.85 },
-        //   { fpr: 0.3, tpr: 0.90 },
-        //   { fpr: 0.5, tpr: 0.95 },
-        //   { fpr: 1, tpr: 1 }
-        // ]);
-        // setAuc(0.92);
-        setRocLoading(false);
-        return;
-      }
-      const json = await res.json();
-      console.debug("ROC response:", json);
-
-      if (!alive) return;
-
-      const raw = json.points ?? [];
-       // Sicherstellen: numeric + sortiert nach fpr
-      const points = raw
-        .map((p: any) => ({ fpr: Number(p.fpr), tpr: Number(p.tpr) }))
-        .filter((p: any) => Number.isFinite(p.fpr) && Number.isFinite(p.tpr))
-        .sort((a: any, b: any) => a.fpr - b.fpr);
-
-      setRocData(points);
-      setAuc(typeof json.auc === "number" ? json.auc : null);
-    } catch (e) {
-      console.error("ROC fetch failed:", e);
-      // Use fallback mock data on error
-      // setRocData([
-      //   { fpr: 0, tpr: 0 },
-      //   { fpr: 0.1, tpr: 0.75 },
-      //   { fpr: 0.2, tpr: 0.85 },
-      //   { fpr: 0.3, tpr: 0.90 },
-      //   { fpr: 0.5, tpr: 0.95 },
-      //   { fpr: 1, tpr: 1 }
-      // ]);
-      // setAuc(0.92);
-    } finally {
-      if (alive) setRocLoading(false);
-    }
-  };
-
-  load();
-  return () => {
-
-     // verhindert setState auf unmounted component
-
-    alive = false;
-  };
-}, []);
-
-
-
-// ============================================================
-  // Modell-Metriken vom Backend laden (live/periodisch)
-  // Endpoint: GET /model/metrics?model_name=Random_Forest
-  //
-  // Unterstützt mehrere mögliche JSON-Strukturen (defensives Parsing),
-  // z.B.:
-  // { accuracy: 0.97, f1: 0.83, precision: 0.84, recall: 0.81 }
-  // oder:
-  // { metrics: { accuracy: ..., f1_score: ... } }
-  //
-  // Refresh alle 10 Sekunden (optional)
-  // ============================================================
-
-useEffect(() => {
-  let alive = true;
-
-  const loadMetrics = async () => {
-    try {
-      setMetricsLoading(true);
-
-      const res = await fetch("http://127.0.0.1:8000/model/metrics?model_name=Random_Forest");
-      if (!res.ok) {
-        console.error("metrics endpoint returned not OK:", res.status);
-        return;
-      }
-
-      const json: any = await res.json();
-      console.debug("model/metrics json:", json);
-
-      // defensives Auslesen: akzeptiert verschiedene Key-Namen
-
-      const acc = json?.accuracy ?? json?.metrics?.accuracy ?? null;
-      const f1 = json?.f1 ?? json?.f1_score ?? json?.metrics?.f1 ?? json?.metrics?.f1_score ?? null;
-      const prec = json?.precision ?? json?.metrics?.precision ?? null;
-      const rec = json?.recall ?? json?.metrics?.recall ?? null;
-
-      if (!alive) return;
-
-      // nur number übernehmen, sonst null (damit UI nicht crasht)
-      setMetrics({
-        accuracy: typeof acc === "number" ? acc : null,
-        f1: typeof f1 === "number" ? f1 : null,
-        precision: typeof prec === "number" ? prec : null,
-        recall: typeof rec === "number" ? rec : null,
-      });
-    } catch (e) {
-      console.error("metrics fetch failed:", e);
-    } finally {
-      if (alive) setMetricsLoading(false);
-    }
-  };
-
-  loadMetrics();
-  const id = setInterval(loadMetrics, 10000); // optional live refresh
-
-  return () => {
-    alive = false;
-    clearInterval(id);
-  };
-}, []);
-
-
-
-
- // --------------------------------------------
-  // Mock/XAI: Beispielwerte für „Normalized Feature Deviations“
-  // (zur Erklärung / Visualisierung einzelner Predictions)
-  // --------------------------------------------
   const deviations = [
     { feature: 'Tool Wear', deviation: 1.78, color: '#ef4444' },
     { feature: 'Rotational Speed', deviation: -0.78, color: '#f59e0b' },
@@ -206,9 +30,7 @@ useEffect(() => {
 
   return (
     <div className="space-y-6">
-      {/* --------------------------------------------
-          UI: Page Header
-         -------------------------------------------- */}
+      {/* Header */}
       <div 
         className="p-6 rounded-[14px] shadow-lg"
         style={{ 
@@ -217,16 +39,14 @@ useEffect(() => {
         }}
       >
         <h1 className="mb-2" style={{ color: '#e5e7eb', fontSize: '1.5rem' }}>
-          Modell-Insights 
+          Modell-Insights & Explainable AI
         </h1>
         <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
-          Modellperformance, Feature Importances und Visualisierungen
+          Modellperformance, Feature Importances und Explainable AI Visualisierungen
         </p>
       </div>
 
-      {/* --------------------------------------------
-          UI: Modell-Basisinformationen (statisch)
-         -------------------------------------------- */}
+      {/* Model Info */}
       <div 
         className="p-6 rounded-[14px] shadow-lg"
         style={{ 
@@ -257,11 +77,7 @@ useEffect(() => {
         </div>
       </div>
 
-     {/* --------------------------------------------
-          UI: KPI Row (live aus /model/metrics)
-          - Zeigt Loading... bis Werte geladen sind
-          - Wandelt 0..1 Werte in Prozent um
-         -------------------------------------------- */}
+      {/* KPI Row */}
       <div className="grid grid-cols-4 gap-4">
         <div 
           className="p-5 rounded-[14px] shadow-lg"
@@ -274,9 +90,8 @@ useEffect(() => {
             Accuracy
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-  {metricsLoading ? "Loading..." : (metrics.accuracy !== null ? `${Math.round(metrics.accuracy * 100)}%` : "—")}
-</p>
-
+            97%
+          </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
             Testdaten
           </p>
@@ -293,9 +108,8 @@ useEffect(() => {
             F1-Score
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-  {metricsLoading ? "Loading..." : (metrics.f1 !== null ? `${Math.round(metrics.f1 * 100)}%` : "—")}
-</p>
-
+            83%
+          </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
             Balanced
           </p>
@@ -312,9 +126,8 @@ useEffect(() => {
             Precision
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-  {metricsLoading ? "Loading..." : (metrics.precision !== null ? `${Math.round(metrics.precision * 100)}%` : "—")}
-</p>
-
+            84%
+          </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
             Class: Failure
           </p>
@@ -331,21 +144,14 @@ useEffect(() => {
             Recall
           </p>
           <p style={{ color: '#e5e7eb', fontSize: '1.625rem', fontWeight: '600' }}>
-  {metricsLoading ? "Loading..." : (metrics.recall !== null ? `${Math.round(metrics.recall * 100)}%` : "—")}
-</p>
-
+            81%
+          </p>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
             Class: Failure
           </p>
         </div>
       </div>
 
-
- {/* --------------------------------------------
-          UI: ROC + Feature Importances
-          - ROC nutzt rocData und auc
-          - Feature Importances sind aktuell Mock
-         -------------------------------------------- */}
       <div className="grid grid-cols-2 gap-4">
         {/* ROC Curve + AUC */}
         <div 
@@ -361,60 +167,41 @@ useEffect(() => {
             </h2>
             <div className="text-right">
               <p style={{ color: '#9ca3af', fontSize: '0.75rem' }}>AUC Score</p>
-              <p style={{ color: '#22d3ee', fontSize: '1.5rem', fontWeight: '600' }}>{auc !== null ? auc.toFixed(2) : "_"}</p>
+              <p style={{ color: '#22d3ee', fontSize: '1.5rem', fontWeight: '600' }}>0.91</p>
             </div>
           </div>
 
-         <ResponsiveContainer width="100%" height={250}>
-  <LineChart data={rocData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-    <XAxis 
-      dataKey="fpr" 
-      stroke="#9ca3af" 
-      type="number"
-      domain={[0, 1]}
-      tick={{ fontSize: 12 }}
-      label={{ value: 'False Positive Rate', position: 'bottom', fill: '#9ca3af', fontSize: 12 }}
-    />
-    <YAxis 
-      dataKey="tpr" 
-      stroke="#9ca3af" 
-      type="number"
-      domain={[0, 1]}
-      tick={{ fontSize: 12 }}
-      label={{ value: 'True Positive Rate', angle: -90, position: 'left', fill: '#9ca3af', fontSize: 12 }}
-    />
-    <Tooltip 
-      contentStyle={{ background: '#232421', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.875rem' }}
-      labelStyle={{ color: '#e5e7eb' }}
-      formatter={(value: any, name: any) => [Number(value).toFixed(3), name]}
-    />
-    {/* ROC Linie */}
-    <Line
-      type="monotone"
-      dataKey="tpr"
-      stroke="#22d3ee"
-      strokeWidth={3}
-      dot={false}
-      isAnimationActive={false}
-      name="ROC"
-    />
-    {/* Zufallslinie als Referenz */}
-    <Line
-      type="linear"
-      data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]}
-      dataKey="tpr"
-      stroke="#9ca3af"
-      strokeWidth={1}
-      strokeDasharray="5 5"
-      dot={false}
-      isAnimationActive={false}
-      name="Random"
-    />
-  </LineChart>
-</ResponsiveContainer> 
-        
-        
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={rocData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis 
+                dataKey="fpr" 
+                stroke="#9ca3af" 
+                label={{ value: 'False Positive Rate', position: 'bottom', fill: '#9ca3af', fontSize: 12 }}
+                style={{ fontSize: '0.75rem' }}
+              />
+              <YAxis 
+                dataKey="tpr" 
+                stroke="#9ca3af" 
+                label={{ value: 'True Positive Rate', angle: -90, position: 'left', fill: '#9ca3af', fontSize: 12 }}
+                style={{ fontSize: '0.75rem' }}
+              />
+              <Tooltip 
+                contentStyle={{ background: '#232421', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.875rem' }}
+                labelStyle={{ color: '#e5e7eb' }}
+              />
+              <Line type="monotone" dataKey="tpr" stroke="#22d3ee" strokeWidth={3} dot={false} />
+              <Line 
+                type="monotone" 
+                data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]} 
+                dataKey="tpr" 
+                stroke="#9ca3af" 
+                strokeWidth={1} 
+                strokeDasharray="5 5"
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
 
         {/* Feature Importances */}
@@ -492,7 +279,7 @@ useEffect(() => {
       </div>
 
       <footer className="pt-8 pb-6 text-center" style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
-        © 2025 – Projekt 2 • Predictive Analysis for Maintenance
+        © 2025 – Mockup • Predictive Analysis Grundgerüst
       </footer>
     </div>
   );
